@@ -5,6 +5,8 @@ use std::net::{TcpListener, TcpStream};
 use std::thread::sleep;
 use std::time::Duration;
 
+const SLEEP_TIME: u64 = 10;
+
 fn handle_conn(mut stream: TcpStream) {
     let buf_reader = BufReader::new(&mut stream);
     let req = buf_reader.lines().next().unwrap().unwrap();
@@ -16,7 +18,7 @@ fn handle_conn(mut stream: TcpStream) {
     let (status_line, filename) = match &req[..] {
         "GET / HTTP/1.1" => ("HTTP/1.1 200 OK", "hello.html"),
         "GET /sleep HTTP/1.1" => {
-            sleep(Duration::from_secs(5));
+            sleep(Duration::from_secs(SLEEP_TIME));
 
             ("HTTP/1.1 200 OK", "hello.html")
         }
@@ -33,7 +35,7 @@ fn main() {
     let listener =
         TcpListener::bind("127.0.0.1:5000").expect("Can't bind the listener to the specified port");
 
-    let pool = ThreadPool::new(5);
+    let mut pool = ThreadPool::new(5);
     for stream in listener.incoming() {
         pool.execute(|| handle_conn(stream.unwrap()));
     }
