@@ -1,24 +1,19 @@
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
-pub struct ThreadPool<F>
-where
-    F: FnOnce() + Send + 'static,
-{
-    pub size: usize,
-    work_queue: Arc<Mutex<Vec<Box<F>>>>,
-    _workers: Vec<JoinHandle<()>>,
+
+struct Worker {
+    id: usize,
+    thread: JoinHandle<()>,
 }
 
-impl<F> ThreadPool<F>
-where
-    F: FnOnce() + Send + 'static,
-{
-    pub fn new(size: usize) -> Self {
-        let work_queue: Arc<Mutex<Vec<Box<F>>>> = Arc::new(Mutex::new(Vec::new()));
-        let mut workers = Vec::new();
-        for _i in 0..size {
-            let work_queue = Arc::clone(&work_queue);
-            workers.push(thread::spawn(move || {
+impl Worker {
+    fn build<F>(id: usize, work_queue: Arc<Mutex<Vec<Box<F>>>>) -> Self
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        Worker {
+            id,
+            thread: thread::spawn(move || {
                 // todo: get mutex Pop work from work_queue and execute it
                 loop {
                     let mut work_queue = work_queue.lock().unwrap();
@@ -27,7 +22,30 @@ where
                         func()
                     }
                 }
-            }));
+            }),
+        }
+    }
+}
+pub struct ThreadPool<F>
+where
+    F: FnOnce() + Send + 'static,
+{
+    pub size: usize,
+    work_queue: Arc<Mutex<Vec<Box<F>>>>,
+    _workers: Vec<Worker>,
+}
+
+impl<F> ThreadPool<F>
+where
+    F: FnOnce() + Send + 'static,
+{
+    pub fn new(size: usize) -> Self {
+        assert!(size > 0);
+        let work_queue: Arc<Mutex<Vec<Box<F>>>> = Arc::new(Mutex::new(Vec::new()));
+        let mut workers = Vec::with_capacity(size);
+        for id in 0..size {
+            let work_queue = Arc::clone(&work_queue);
+            workers.push(Worker::build(id, work_queue));
         }
 
         ThreadPool {
